@@ -5,13 +5,15 @@
   <style>
     body {
       font-family: Arial, sans-serif;
-      background-color: #d8e2f1; 
+      background-color: #b2a5bd; 
       margin: 0;
       padding: 0;
     }
     h1 {
       text-align: center;
-      margin-top: 32px;
+      font-family: 'Times New Roman', Times, serif;
+      color: #f4f1f6;
+      margin-top: 35px;
       margin-bottom: 20px;
     }
     #tooltip {
@@ -30,15 +32,15 @@
       position: absolute;
       bottom: 20px; /* 调整按钮到页面底部 */
       left: 20px;
-      background-color: #6ea5e0;
-      color: rgb(230, 198, 198);
+      background-color: #b39ddb; /* 紫色按钮 */
+      color: white;
       border: none;
       padding: 10px 15px;
       cursor: pointer;
       border-radius: 5px;
     }
     .reset-button:hover {
-      background-color: #3864c1;
+      background-color: #9575cd; /* 更深的紫色 */
     }
     #legend {
       position: absolute;
@@ -70,11 +72,10 @@
 <div id="tooltip"></div>
 <div id="legend">
   <strong>Population Legend</strong>
-  <div>
-    <div style="background-color: #f7fbff;"></div>Low
-  </div>
-  <div>
-    <div style="background-color: #08306b;"></div>High
+  <svg width="150" height="50" style="display: block; margin-top: 10px;"></svg>
+  <div style="display: flex; justify-content: space-between; margin-top: 5px;">
+    <span id="legend-min">0</span>
+    <span id="legend-max">0</span>
   </div>
 </div>
 <script src="https://d3js.org/d3.v7.min.js"></script>
@@ -101,9 +102,37 @@ Promise.all([d3.json("sgmap.json"), d3.csv("population2023.csv")]).then(data => 
 
     let geopath = d3.geoPath().projection(projection);
 
-    let colorScale = d3.scaleLinear()
-        .domain([0, d3.max(mapData, d => d.popdata)])
-        .range(["#f7fbff", "#08306b"]);
+    // Use lighter purple color scale
+    let colorScale = d3.scaleSequential(d3.interpolatePurples)
+        .domain([0, d3.max(mapData, d => d.popdata)]);
+
+    // Update legend color bar
+    let legendSvg = d3.select("#legend svg");
+    let gradient = legendSvg.append("defs")
+        .append("linearGradient")
+        .attr("id", "gradient")
+        .attr("x1", "0%")
+        .attr("x2", "100%")
+        .attr("y1", "0%")
+        .attr("y2", "0%");
+
+    let legendColors = d3.range(0, 1.01, 0.01);
+    legendColors.forEach((t, i) => {
+        gradient.append("stop")
+            .attr("offset", `${i}%`)
+            .attr("stop-color", d3.interpolatePurples(t)); // 使用 d3.interpolatePurples
+    });
+
+    legendSvg.append("rect")
+        .attr("x", 0)
+        .attr("y", 0)
+        .attr("width", 150)
+        .attr("height", 20)
+        .style("fill", "url(#gradient)");
+
+    // Update legend min and max values
+    d3.select("#legend-min").text(0);
+    d3.select("#legend-max").text(d3.max(mapData, d => d.popdata));
 
     let tooltip = d3.select("#tooltip");
 
@@ -116,7 +145,8 @@ Promise.all([d3.json("sgmap.json"), d3.csv("population2023.csv")]).then(data => 
         .enter()
         .append("path")
         .attr("d", geopath)
-        .attr("stroke", "black")
+        .attr("stroke", "lightgrey") 
+        .attr("stroke-width", 1)
         .attr("fill", d => colorScale(d.popdata))
         .on("mouseover", (event, d) => {
             d3.select(event.target)
@@ -133,12 +163,12 @@ Promise.all([d3.json("sgmap.json"), d3.csv("population2023.csv")]).then(data => 
         .on("mouseout", event => {
             d3.select(event.target)
                 .attr("stroke-width", 1)
-                .attr("stroke", "black");
+                .attr("stroke", "white");
 
             tooltip.style("display", "none");
         })
         .on("click", (event, d) => {
-            let [[x0, y0], [x1, y1]] = geopath.bounds(d); // Get bounding box of the clicked region
+            let [[x0, y0], [x1, y1]] = geopath.bounds(d);
 
             svg.transition()
                 .duration(750)
@@ -170,4 +200,3 @@ Promise.all([d3.json("sgmap.json"), d3.csv("population2023.csv")]).then(data => 
 </script>
 </body>
 </html>
-
