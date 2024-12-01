@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #d8e2f1; 
+      margin: 0;
+      padding: 0;
+    }
+    h1 {
+      text-align: center;
+      margin-top: 32px;
+      margin-bottom: 20px;
+    }
+    #tooltip {
+      position: absolute;
+      background-color: rgba(255, 255, 255, 0.9);
+      border: 1px solid #999;
+      border-radius: 5px;
+      padding: 8px;
+      display: none;
+      pointer-events: none;
+      box-shadow: 2px 2px 6px rgba(0, 0, 0, 0.1);
+      font-size: 13px;
+      color: #333;
+    }
+    .reset-button {
+      position: absolute;
+      bottom: 20px; /* 调整按钮到页面底部 */
+      left: 20px;
+      background-color: #6ea5e0;
+      color: rgb(230, 198, 198);
+      border: none;
+      padding: 10px 15px;
+      cursor: pointer;
+      border-radius: 5px;
+    }
+    .reset-button:hover {
+      background-color: #3864c1;
+    }
+    #legend {
+      position: absolute;
+      bottom: 20px; /* 位于页面底部 */
+      right: 20px;  /* 靠右对齐 */
+      background-color: white;
+      border: 1px solid black;
+      border-radius: 5px;
+      padding: 10px;
+      box-shadow: 2px 2px 6px rgba(0, 0, 0, 0.2);
+      font-size: 12px;
+    }
+    #legend div {
+      display: flex;
+      align-items: center;
+      margin-top: 5px;
+    }
+    #legend div div {
+      width: 20px;
+      height: 20px;
+      margin-right: 5px;
+    }
+  </style>
+</head>
+<body>
+<h1>Singapore Population Map</h1>
+<button class="reset-button">Reprovision</button>
+<svg></svg>
+<div id="tooltip"></div>
+<div id="legend">
+  <strong>Population Legend</strong>
+  <div>
+    <div style="background-color: #f7fbff;"></div>Low
+  </div>
+  <div>
+    <div style="background-color: #08306b;"></div>High
+  </div>
+</div>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<script>
+let width = 1000, height = 600;
+
+let svg = d3.select("svg")
+    .attr("viewBox", "0 0 " + width + " " + height);
+
+// Load external data
+Promise.all([d3.json("sgmap.json"), d3.csv("population2023.csv")]).then(data => {
+    let mapData = data[0].features;
+    let popData = data[1];
+
+    // Merge population data with map data
+    mapData.forEach(d => {
+        let subzone = popData.find(e => e.Subzone.toUpperCase() == d.properties.Name);
+        d.popdata = (subzone != undefined) ? parseInt(subzone.Population) : 0;
+    });
+
+    let projection = d3.geoMercator()
+        .center([103.851959, 1.290270])
+        .fitExtent([[20, 20], [980, 580]], data[0]);
+
+    let geopath = d3.geoPath().projection(projection);
+
+    let colorScale = d3.scaleLinear()
+        .domain([0, d3.max(mapData, d => d.popdata)])
+        .range(["#f7fbff", "#08306b"]);
+
+    let tooltip = d3.select("#tooltip");
+
+    let g = svg.append("g")
+        .attr("id", "districts");
+
+    // Draw map and add interactions
+    g.selectAll("path")
+        .data(mapData)
+        .enter()
+        .append("path")
+        .attr("d", geopath)
+        .attr("stroke", "black")
+        .attr("fill", d => colorScale(d.popdata))
+        .on("mouseover", (event, d) => {
+            d3.select(event.target)
+                .attr("stroke-width", 2)
+                .attr("stroke", "orange");
+
+            tooltip.style("display", "block")
+                   .html(`<strong>${d.properties.Name}</strong><br>人口: ${d.popdata}`);
+        })
+        .on("mousemove", event => {
+            tooltip.style("left", (event.pageX + 10) + "px")
+                   .style("top", (event.pageY + 10) + "px");
+        })
+        .on("mouseout", event => {
+            d3.select(event.target)
+                .attr("stroke-width", 1)
+                .attr("stroke", "black");
+
+            tooltip.style("display", "none");
+        })
+        .on("click", (event, d) => {
+            let [[x0, y0], [x1, y1]] = geopath.bounds(d); // Get bounding box of the clicked region
+
+            svg.transition()
+                .duration(750)
+                .call(
+                    zoom.transform,
+                    d3.zoomIdentity
+                        .translate(width / 2, height / 2)
+                        .scale(Math.min(8, 0.9 / Math.max((x1 - x0) / width, (y1 - y0) / height)))
+                        .translate(-(x0 + x1) / 2, -(y0 + y1) / 2)
+                );
+        });
+
+    // Add zoom behavior
+    let zoom = d3.zoom()
+        .scaleExtent([1, 8])
+        .on("zoom", (event) => {
+            g.attr("transform", event.transform);
+        });
+
+    svg.call(zoom);
+
+    // Add reset button functionality
+    d3.select(".reset-button").on("click", () => {
+        svg.transition()
+            .duration(750)
+            .call(zoom.transform, d3.zoomIdentity); // Reset to initial view
+    });
+});
+</script>
+</body>
+</html>
+
